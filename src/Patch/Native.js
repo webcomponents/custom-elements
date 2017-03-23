@@ -28,4 +28,5 @@ export default {
   HTMLElement: window.HTMLElement,
   HTMLElement_innerHTML: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'innerHTML'),
   HTMLElement_insertAdjacentElement: window.HTMLElement.prototype['insertAdjacentElement'],
+  ShadowRoot_innerHTML: window.ShadowRoot ? Object.getOwnPropertyDescriptor(window.ShadowRoot.prototype, 'innerHTML') : undefined,
 };

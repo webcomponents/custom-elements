@@ -15,6 +15,7 @@ import PatchHTMLElement from './Patch/HTMLElement.js';
 import PatchDocument from './Patch/Document.js';
 import PatchNode from './Patch/Node.js';
 import PatchElement from './Patch/Element.js';
+import PatchShadowRoot from './Patch/ShadowRoot.js';
 
 const priorCustomElements = window['customElements'];
 
@@ -29,6 +30,7 @@ if (!priorCustomElements ||
   PatchDocument(internals);
   PatchNode(internals);
   PatchElement(internals);
+  PatchShadowRoot(internals);
 
   // The main document is always associated with the registry.
   document.__CE_hasRegistry = true;
