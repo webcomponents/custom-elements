@@ -5,6 +5,7 @@ import * as Utilities from '../Utilities.js';
 
 import PatchParentNode from './Interface/ParentNode.js';
 import PatchChildNode from './Interface/ChildNode.js';
+import PatchInnerHTML from './Method/innerHTML.js';
 
 /**
  * @param {!CustomElementInternals} internals
@@ -27,64 +28,16 @@ export default function(internals) {
   }
 
 
-  function patch_innerHTML(destination, baseDescriptor) {
-    Object.defineProperty(destination, 'innerHTML', {
-      enumerable: baseDescriptor.enumerable,
-      configurable: true,
-      get: baseDescriptor.get,
-      set: /** @this {Element} */ function(htmlString) {
-        const isConnected = Utilities.isConnected(this);
-
-        // NOTE: In IE11, when using the native `innerHTML` setter, all nodes
-        // that were previously descendants of the context element have all of
-        // their children removed as part of the set - the entire subtree is
-        // 'disassembled'. This work around walks the subtree *before* using the
-        // native setter.
-        /** @type {!Array<!Element>|undefined} */
-        let removedElements = undefined;
-        if (isConnected) {
-          removedElements = [];
-          Utilities.walkDeepDescendantElements(this, element => {
-            if (element !== this) {
-              removedElements.push(element);
-            }
-          });
-        }
-
-        baseDescriptor.set.call(this, htmlString);
-
-        if (removedElements) {
-          for (let i = 0; i < removedElements.length; i++) {
-            const element = removedElements[i];
-            if (element.__CE_state === CEState.custom) {
-              internals.disconnectedCallback(element);
-            }
-          }
-        }
-
-        // Only create custom elements if this element's owner document is
-        // associated with the registry.
-        if (!this.ownerDocument.__CE_hasRegistry) {
-          internals.patchTree(this);
-        } else {
-          internals.patchAndUpgradeTree(this);
-        }
-        return htmlString;
-      },
-    });
-  }
-
   if (Native.Element_innerHTML && Native.Element_innerHTML.get) {
-    patch_innerHTML(Element.prototype, Native.Element_innerHTML);
+    PatchInnerHTML(internals, Element.prototype, Native.Element_innerHTML);
   } else if (Native.HTMLElement_innerHTML && Native.HTMLElement_innerHTML.get) {
-    patch_innerHTML(HTMLElement.prototype, Native.HTMLElement_innerHTML);
+    PatchInnerHTML(internals, HTMLElement.prototype, Native.HTMLElement_innerHTML);
   } else {
-
     /** @type {HTMLDivElement} */
     const rawDiv = Native.Document_createElement.call(document, 'div');
 
     internals.addPatch(function(element) {
-      patch_innerHTML(element, {
+      PatchInnerHTML(internals, element, {
         enumerable: true,
         configurable: true,
         // Implements getting `innerHTML` by performing an unpatched `cloneNode`
