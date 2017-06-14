@@ -24,6 +24,7 @@ export default class DocumentConstructionObserver {
 
     if (this._document.readyState === 'loading') {
       this._observer = new MutationObserver(this._handleMutations.bind(this));
+      this._document.addEventListener('readystatechange', this._onReadystatechange.bind(this));
 
       // Nodes created by the parser are given to the observer *before* the next
       // task runs. Inline scripts are run in a new task. This means that the
@@ -33,6 +34,18 @@ export default class DocumentConstructionObserver {
         childList: true,
         subtree: true,
       });
+    }
+  }
+
+  _onReadystatechange(e) {
+    // Once the document's `readyState` is 'interactive' or 'complete', all new
+    // nodes created within that document will be the result of script and
+    // should be handled by patching.
+    const readyState = this._document.readyState;
+    if (readyState === 'interactive' || readyState === 'complete') {
+      const mutations = this._observer.takeRecords();
+      this.disconnect();
+      this._handleMutations(mutations);
     }
   }
 
