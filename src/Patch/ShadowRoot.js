@@ -8,9 +8,9 @@ import PatchInnerHTML from './Method/innerHTML.js';
  * @param {!CustomElementInternals} internals
  */
 export default function(internals) {
-  if (!ShadowRoot) return;
+  if (!window.ShadowRoot) return;
 
   if (Native.ShadowRoot_innerHTML) {
-    PatchInnerHTML(internals, ShadowRoot.prototype, Native.ShadowRoot_innerHTML);
+    PatchInnerHTML(internals, window.ShadowRoot.prototype, Native.ShadowRoot_innerHTML);
   }
 };
