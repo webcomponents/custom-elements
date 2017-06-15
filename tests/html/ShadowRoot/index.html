@@ -3,5 +3,8 @@
 <script>
   WCT.loadSuites([
     './innerHTML.html',
+    // NOTE: This is flag is not actually parsed in any way; the file just looks
+    // in `window.location.search` for the right substrings.
+    './innerHTML.html?shadydom=true',
   ]);
 </script>

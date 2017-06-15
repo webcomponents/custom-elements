@@ -3,7 +3,10 @@
 <head>
 <title>ShadowRoot#innerHTML</title>
 <script>
-  ShadyDOM = {force: true};
+  if (window.location.search.indexOf("shadydom=true") > -1) {
+    window.ShadyDOM = {force: true};
+  }
+
   (window.customElements = window.customElements || {}).forcePolyfill = true;
 </script>
 <script src="../../../../es6-promise/dist/es6-promise.auto.min.js"></script>
