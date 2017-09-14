@@ -13,6 +13,7 @@ import CustomElementRegistry from './CustomElementRegistry.js';
 
 import PatchHTMLElement from './Patch/HTMLElement.js';
 import PatchDocument from './Patch/Document.js';
+import PatchDocumentFragment from './Patch/DocumentFragment.js';
 import PatchNode from './Patch/Node.js';
 import PatchElement from './Patch/Element.js';
 import PatchShadowRoot from './Patch/ShadowRoot.js';
@@ -28,6 +29,7 @@ if (!priorCustomElements ||
 
   PatchHTMLElement(internals);
   PatchDocument(internals);
+  PatchDocumentFragment(internals);
   PatchNode(internals);
   PatchElement(internals);
   PatchShadowRoot(internals);
