@@ -50,7 +50,7 @@ suite('Custom elements in the assigned string are created when setting `innerHTM
     defineWithLocalName(localName2);
   });
 
-  test('Disconnected context element', function() {
+  test('Disconnected ShadowRoot host', function() {
     const div = document.createElement('div');
     div.attachShadow({mode: 'open'});
     div.shadowRoot.innerHTML = `<${localName1}><${localName2}></${localName2}></${localName1}>`;
@@ -66,7 +66,7 @@ suite('Custom elements in the assigned string are created when setting `innerHTM
     assert.equal(div.shadowRoot.childNodes[0].childNodes[0].childNodes.length, 0);
   });
 
-  test('Connected context element', function() {
+  test('Connected ShadowRoot host', function() {
     const div = document.createElement('div');
     div.attachShadow({mode: 'open'});
     document.body.appendChild(div);
@@ -87,7 +87,7 @@ suite('Custom elements in the assigned string are created when setting `innerHTM
   });
 });
 
-suite('Custom element descendants of the context element are disconnected when setting `innerHTML`.', function() {
+suite('Custom element descendants of the ShadowRoot are disconnected when setting `innerHTML`.', function() {
   let localName1;
   let localName2;
   let div;
@@ -118,7 +118,7 @@ suite('Custom element descendants of the context element are disconnected when s
     assert.equal(element2.childNodes.length, 0);
   });
 
-  test('Disconnected context element', function() {
+  test('Disconnected ShadowRoot host', function() {
     div.shadowRoot.innerHTML = "";
 
     // `div.shadowRoot` no longer has children.
@@ -134,7 +134,7 @@ suite('Custom element descendants of the context element are disconnected when s
     assert.equal(element2.disconnectedCallbackCount, 0);
   });
 
-  test('Connected context element', function() {
+  test('Connected ShadowRoot host', function() {
     document.body.appendChild(div);
 
     assert.equal(div.shadowRoot.childNodes.length, 1);
