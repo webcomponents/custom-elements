@@ -31,10 +31,19 @@ export default function(internals) {
       });
   };
 
+  // If `document.createElement` is an own property, use it instead of
+  // `Document.prototype.createElement` to work around a LastPass bug.
   const singletonDesc = Native.window_document_createElement;
   if (singletonDesc && typeof singletonDesc.value === "function") {
     patch_createElement(singletonDesc.value);
     delete document.createElement;
+
+    console.warn("Custom Elements: " +
+      "An own property for `createElement` was found on `document`. This " +
+      "function was wrapped instead of `Document.prototype.createElement` " +
+      "and the own property was removed. See " +
+      "https://github.com/webcomponents/custom-elements/issues/137 for more " +
+      "information.");
   } else {
     patch_createElement(Native.Document_createElement);
   }
