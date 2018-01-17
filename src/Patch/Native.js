@@ -17,7 +17,6 @@ if (window_document_createElement &&
 }
 
 export default {
-  window_document_createElement: Object.getOwnPropertyDescriptor(window.document, 'createElement'),
   Document_createElement: window.Document.prototype.createElement,
   Document_createElementNS: window.Document.prototype.createElementNS,
   Document_importNode: window.Document.prototype.importNode,
