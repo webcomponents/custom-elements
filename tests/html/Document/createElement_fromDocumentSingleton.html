@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<title>Document#createElement</title>
+
+<script>
+const NATIVE_CREATEELEMENT = document.createElement;
+let wrapperCreateElementCallCount = 0;
+document.createElement = function(...args) {
+  wrapperCreateElementCallCount++;
+  return NATIVE_CREATEELEMENT.call(this, ...args);
+};
+</script>
+
+<script>
+  (window.customElements = window.customElements || {}).forcePolyfill = true;
+</script>
+<script src="../../../../es6-promise/dist/es6-promise.auto.min.js"></script>
+<script src="../../../../web-component-tester/browser.js"></script>
+<script src="../../../custom-elements.min.js"></script>
+</head>
+<body>
+<script>
+function generateLocalName() {
+  return 'test-element-' + Math.random().toString(32).substring(2);
+}
+
+function defineWithLocalName(localName, observedAttributes) {
+  const constructor = class extends HTMLElement {};
+  customElements.define(localName, constructor);
+  return constructor;
+}
+
+suite('Creating a custom element.', function() {
+  let localName;
+  let constructor;
+
+  setup(function() {
+    localName = generateLocalName();
+    constructor = defineWithLocalName(localName);
+  });
+
+  test('`document`\'s own property `createElement` is removed.', function() {
+    const desc = Object.getOwnPropertyDescriptor(document, 'createElement');
+    assert(desc === undefined);
+  });
+
+  test('Creating an element using the wrapped ' +
+      '`Document.prototype.createElement` creates an instance of that custom ' +
+      'element.', function() {
+    const element = document.createElement(localName);
+    assert(element instanceof constructor);
+  });
+
+  test('Creating an element using the wrapped ' +
+      '`Document.prototype.createElement` calls into the original, own ' +
+      'property `createElement`.', function() {
+    const initialCallCount = wrapperCreateElementCallCount;
+    const element = document.createElement(localName);
+    const newCallCount = wrapperCreateElementCallCount;
+    assert((newCallCount - initialCallCount) === 1);
+  });
+
+  test('Creating an element using its constructor calls into the original, ' +
+      'own property `createElement`.', function() {
+    const initialCallCount = wrapperCreateElementCallCount;
+    const element = new constructor();
+    const newCallCount = wrapperCreateElementCallCount;
+    assert((newCallCount - initialCallCount) === 1);
+  });
+});
+</script>
+</body>
+</html>
