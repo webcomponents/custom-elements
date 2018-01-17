@@ -1,3 +1,21 @@
+// If `document.createElement` is an own property, use it instead of
+// `Document.prototype.createElement` to work around a LastPass bug.
+// See https://github.com/webcomponents/custom-elements/issues/137
+const window_document_createElement =
+    Object.getOwnPropertyDescriptor(window.document, 'createElement');
+if (window_document_createElement &&
+    typeof window_document_createElement.value === "function") {
+  Document.prototype['createElement'] = window_document_createElement.value;
+  delete document.createElement;
+
+  console.warn("Custom Elements: " +
+    "An own property for `createElement` was found on `document`. This " +
+    "function was wrapped instead of `Document.prototype.createElement` " +
+    "and the own property was removed. See " +
+    "https://github.com/webcomponents/custom-elements/issues/137 for more " +
+    "information.");
+}
+
 export default {
   window_document_createElement: Object.getOwnPropertyDescriptor(window.document, 'createElement'),
   Document_createElement: window.Document.prototype.createElement,
