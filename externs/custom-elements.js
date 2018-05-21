@@ -35,12 +35,6 @@ let CustomElementDefinition;
 /** @type {boolean|undefined} */
 Node.prototype.__CE_hasRegistry;
 
-/** @type {boolean|undefined} */
-Node.prototype.__CE_isImportDocument;
-
-/** @type {boolean|undefined} */
-Node.prototype.__CE_documentLoadHandled;
-
 // Apply generally to Node.
 
 /** @type {boolean|undefined} */

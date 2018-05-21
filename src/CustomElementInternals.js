@@ -168,58 +168,14 @@ export default class CustomElementInternals {
    *
    * @param {!Node} root
    * @param {{
-   *   visitedImports: (!Set<!Node>|undefined),
    *   upgrade: (!function(!Element)|undefined),
    * }=} options
    */
   patchAndUpgradeTree(root, options = {}) {
-    const visitedImports = options.visitedImports || new Set();
     const upgrade = options.upgrade || (element => this.upgradeElement(element));
 
     const elements = [];
-
-    const gatherElements = element => {
-      if (element.localName === 'link' && element.getAttribute('rel') === 'import') {
-        // The HTML Imports polyfill sets a descendant element of the link to
-        // the `import` property, specifically this is *not* a Document.
-        const importNode = /** @type {?Node} */ (element.import);
-
-        if (importNode instanceof Node) {
-          importNode.__CE_isImportDocument = true;
-          // Connected links are associated with the registry.
-          importNode.__CE_hasRegistry = true;
-        }
-
-        if (importNode && importNode.readyState === 'complete') {
-          importNode.__CE_documentLoadHandled = true;
-        } else {
-          // If this link's import root is not available, its contents can't be
-          // walked. Wait for 'load' and walk it when it's ready.
-          element.addEventListener('load', () => {
-            const importNode = /** @type {!Node} */ (element.import);
-
-            if (importNode.__CE_documentLoadHandled) return;
-            importNode.__CE_documentLoadHandled = true;
-
-            // Clone the `visitedImports` set that was populated sync during
-            // the `patchAndUpgradeTree` call that caused this 'load' handler to
-            // be added. Then, remove *this* link's import node so that we can
-            // walk that import again, even if it was partially walked later
-            // during the same `patchAndUpgradeTree` call.
-            const clonedVisitedImports = new Set(visitedImports);
-            clonedVisitedImports.delete(importNode);
-
-            this.patchAndUpgradeTree(importNode, {visitedImports: clonedVisitedImports, upgrade});
-          });
-        }
-      } else {
-        elements.push(element);
-      }
-    };
-
-    // `walkDeepDescendantElements` populates (and internally checks against)
-    // `visitedImports` when traversing a loaded import.
-    Utilities.walkDeepDescendantElements(root, gatherElements, visitedImports);
+    Utilities.walkDeepDescendantElements(root, element => elements.push(element));
 
     if (this._hasPatches) {
       for (let i = 0; i < elements.length; i++) {
@@ -250,10 +206,9 @@ export default class CustomElementInternals {
     //   must return this Document's browsing context's WindowProxy object, if
     //   this Document has an associated browsing context, or null otherwise."
     const ownerDocument = element.ownerDocument;
-    if (
-      !ownerDocument.defaultView &&
-      !(ownerDocument.__CE_isImportDocument && ownerDocument.__CE_hasRegistry)
-    ) return;
+    if (!ownerDocument.defaultView && !ownerDocument.__CE_hasRegistry) {
+      return;
+    }
 
     const definition = this.localNameToDefinition(element.localName);
     if (!definition) return;

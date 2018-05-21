@@ -33,10 +33,10 @@ export function isConnected(node) {
 
   /** @type {?Node|undefined} */
   let current = node;
-  while (current && !(current.__CE_isImportDocument || current instanceof Document)) {
+  while (current && !(current instanceof Document)) {
     current = current.parentNode || (window.ShadowRoot && current instanceof ShadowRoot ? current.host : undefined);
   }
-  return !!(current && (current.__CE_isImportDocument || current instanceof Document));
+  return !!(current && current instanceof Document);
 }
 
 /**
@@ -64,9 +64,8 @@ function nextNode(root, start) {
 /**
  * @param {!Node} root
  * @param {!function(!Element)} callback
- * @param {!Set<Node>=} visitedImports
  */
-export function walkDeepDescendantElements(root, callback, visitedImports = new Set()) {
+export function walkDeepDescendantElements(root, callback) {
   let node = root;
   while (node) {
     if (node.nodeType === Node.ELEMENT_NODE) {
@@ -74,30 +73,11 @@ export function walkDeepDescendantElements(root, callback, visitedImports = new 
 
       callback(element);
 
-      const localName = element.localName;
-      if (localName === 'link' && element.getAttribute('rel') === 'import') {
-        // If this import (polyfilled or not) has it's root node available,
-        // walk it.
-        const importNode = /** @type {!Node} */ (element.import);
-        if (importNode instanceof Node && !visitedImports.has(importNode)) {
-          // Prevent multiple walks of the same import root.
-          visitedImports.add(importNode);
-
-          for (let child = importNode.firstChild; child; child = child.nextSibling) {
-            walkDeepDescendantElements(child, callback, visitedImports);
-          }
-        }
-
-        // Ignore descendants of import links to prevent attempting to walk the
-        // elements created by the HTML Imports polyfill that we just walked
-        // above.
-        node = nextSiblingOrAncestorSibling(root, element);
-        continue;
-      } else if (localName === 'template') {
-        // Ignore descendants of templates. There shouldn't be any descendants
-        // because they will be moved into `.content` during construction in
-        // browsers that support template but, in case they exist and are still
-        // waiting to be moved by a polyfill, they will be ignored.
+      // Ignore descendants of templates. There shouldn't be any descendants
+      // because they will be moved into `.content` during construction in
+      // browsers that support template but, in case they exist and are still
+      // waiting to be moved by a polyfill, they will be ignored.
+      if (element.localName === 'template') {
         node = nextSiblingOrAncestorSibling(root, element);
         continue;
       }
@@ -106,7 +86,7 @@ export function walkDeepDescendantElements(root, callback, visitedImports = new 
       const shadowRoot = element.__CE_shadowRoot;
       if (shadowRoot) {
         for (let child = shadowRoot.firstChild; child; child = child.nextSibling) {
-          walkDeepDescendantElements(child, callback, visitedImports);
+          walkDeepDescendantElements(child, callback);
         }
       }
     }
