@@ -16,23 +16,34 @@ const sourcemaps = require('gulp-sourcemaps');
 
 const closureCompiler = compilerPackage.gulp();
 
-gulp.task('default', () => {
+const gulpTask = (closureOptions = {}) => {
   return gulp.src('./src/**/*.js', {base: './'})
     .pipe(sourcemaps.init())
-    .pipe(closureCompiler({
+    .pipe(closureCompiler(Object.assign({
       compilation_level: 'ADVANCED',
       warning_level: 'VERBOSE',
       language_in: 'ECMASCRIPT6_STRICT',
-      language_out: 'ECMASCRIPT5_STRICT',
       externs: ['externs/custom-elements.js'],
       dependency_mode: 'STRICT',
-      entry_point: ['/src/custom-elements'],
-      js_output_file: 'custom-elements.min.js',
       output_wrapper: '(function(){\n%output%\n}).call(self);',
       assume_function_wrapper: true,
       new_type_inf: true,
       rewrite_polyfills: false,
-    }))
-    .pipe(sourcemaps.write('/'))
+    }, closureOptions)))
+    .pipe(sourcemaps.write('./'))
     .pipe(gulp.dest('./'));
+};
+
+const buildPolyfill = () => gulpTask({
+  entry_point: ['/src/custom-elements'],
+  js_output_file: 'custom-elements.min.js',
+  language_out: 'ECMASCRIPT5_STRICT',
 });
+
+const buildNativeShim = () => gulpTask({
+  entry_point: ['/src/native-shim'],
+  js_output_file: 'native-shim.min.js',
+  language_out: 'ECMASCRIPT6_STRICT',
+});
+
+gulp.task('default', gulp.series(buildPolyfill, buildNativeShim));
