@@ -27,8 +27,9 @@ export default function(internals) {
     function(localName) {
       // Only create custom elements if this document is associated with the registry.
       if (this.__CE_hasRegistry) {
-        const definition = internals.localNameToDefinition(localName);
+        let definition = internals.localNameToDefinition(localName);
         if (definition) {
+          definition = internals.ensureDefinitionGenerated(definition);
           return new (definition.constructorFunction)();
         }
       }
@@ -69,8 +70,9 @@ export default function(internals) {
     function(namespace, localName) {
       // Only create custom elements if this document is associated with the registry.
       if (this.__CE_hasRegistry && (namespace === null || namespace === NS_HTML)) {
-        const definition = internals.localNameToDefinition(localName);
+        let definition = internals.localNameToDefinition(localName);
         if (definition) {
+          definition = internals.ensureDefinitionGenerated(definition);
           return new (definition.constructorFunction)();
         }
       }

@@ -66,11 +66,7 @@ export default class CustomElementRegistry {
     this._documentConstructionObserver = new DocumentConstructionObserver(internals, document);
   }
 
-  /**
-   * @param {string} localName
-   * @param {!Function} constructor
-   */
-  define(localName, constructor) {
+  _define(localName, constructor, isClassGenerator) {
     if (!(constructor instanceof Function)) {
       throw new TypeError('Custom element constructors must be functions.');
     }
@@ -86,49 +82,18 @@ export default class CustomElementRegistry {
     if (this._elementDefinitionIsRunning) {
       throw new Error('A custom element is already being defined.');
     }
+
     this._elementDefinitionIsRunning = true;
 
-    let connectedCallback;
-    let disconnectedCallback;
-    let adoptedCallback;
-    let attributeChangedCallback;
-    let observedAttributes;
-    try {
-      /** @type {!Object} */
-      const prototype = constructor.prototype;
-      if (!(prototype instanceof Object)) {
-        throw new TypeError('The custom element constructor\'s prototype is not an object.');
-      }
-
-      function getCallback(name) {
-        const callbackValue = prototype[name];
-        if (callbackValue !== undefined && !(callbackValue instanceof Function)) {
-          throw new Error(`The '${name}' callback must be a function.`);
-        }
-        return callbackValue;
-      }
-
-      connectedCallback = getCallback('connectedCallback');
-      disconnectedCallback = getCallback('disconnectedCallback');
-      adoptedCallback = getCallback('adoptedCallback');
-      attributeChangedCallback = getCallback('attributeChangedCallback');
-      observedAttributes = constructor['observedAttributes'] || [];
-    } catch (e) {
-      return;
-    } finally {
-      this._elementDefinitionIsRunning = false;
+    // decorate class generator
+    if (isClassGenerator) {
+      constructor.localName = localName;
+      constructor.isClassGenerator = true;
     }
 
-    const definition = {
-      localName,
-      constructorFunction: constructor,
-      connectedCallback,
-      disconnectedCallback,
-      adoptedCallback,
-      attributeChangedCallback,
-      observedAttributes,
-      constructionStack: [],
-    };
+    const definition = isClassGenerator ? constructor :
+      this._internals.createDefinition(localName, constructor);
+    this._elementDefinitionIsRunning = false;
 
     this._internals.setDefinition(localName, definition);
     this._pendingDefinitions.push(definition);
@@ -139,6 +104,22 @@ export default class CustomElementRegistry {
       this._flushPending = true;
       this._flushCallback(() => this._flush());
     }
+  }
+
+  /**
+   * @param {string} localName
+   * @param {!Function} constructor
+   */
+  define(localName, constructor) {
+    this._define(localName, constructor, false);
+  }
+
+  /**
+   * @param {string} localName
+   * @param {!Function} classGenerator
+   */
+  lazyDefine(localName, classGenerator) {
+    this._define(localName, classGenerator, true);
   }
 
   upgrade(element) {
@@ -222,6 +203,7 @@ export default class CustomElementRegistry {
   get(localName) {
     const definition = this._internals.localNameToDefinition(localName);
     if (definition) {
+      this._internals.ensureDefinitionGenerated(definition);
       return definition.constructorFunction;
     }
 

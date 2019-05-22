@@ -39,6 +39,66 @@ export default class CustomElementInternals {
   }
 
   /**
+   *
+   * @param {function} constructor
+   */
+  createDefinition(localName, constructor) {
+    let connectedCallback;
+    let disconnectedCallback;
+    let adoptedCallback;
+    let attributeChangedCallback;
+    let observedAttributes;
+    try {
+      /** @type {!Object} */
+      const prototype = constructor.prototype;
+      if (!(prototype instanceof Object)) {
+        throw new TypeError('The custom element constructor\'s prototype is not an object.');
+      }
+
+      function getCallback(name) {
+        const callbackValue = prototype[name];
+        if (callbackValue !== undefined && !(callbackValue instanceof Function)) {
+          throw new Error(`The '${name}' callback must be a function.`);
+        }
+        return callbackValue;
+      }
+
+      connectedCallback = getCallback('connectedCallback');
+      disconnectedCallback = getCallback('disconnectedCallback');
+      adoptedCallback = getCallback('adoptedCallback');
+      attributeChangedCallback = getCallback('attributeChangedCallback');
+      observedAttributes = constructor['observedAttributes'] || [];
+    } catch (e) {
+      return;
+    }
+
+    return {
+      localName,
+      constructorFunction: constructor,
+      connectedCallback,
+      disconnectedCallback,
+      adoptedCallback,
+      attributeChangedCallback,
+      observedAttributes,
+      constructionStack: [],
+      isClassGenerator: false
+    };
+  }
+
+  ensureDefinitionGenerated(definition) {
+    // Reify definition if it is a class generator.
+    if (definition.isClassGenerator) {
+      this._elementDefinitionIsRunning = true;
+      const localName = definition.localName;
+      const constructor = definition();
+      definition = this.createDefinition(localName, constructor);
+      this._elementDefinitionIsRunning = false;
+      this.setDefinition(localName, definition);
+    }
+    return definition;
+  }
+
+  /**
    * @param {string} localName
    * @return {!CustomElementDefinition|undefined}
    */
@@ -294,8 +354,10 @@ export default class CustomElementInternals {
       !(ownerDocument.__CE_isImportDocument && ownerDocument.__CE_hasRegistry)
     ) return;
 
-    const definition = this.localNameToDefinition(element.localName);
+    let definition = this.localNameToDefinition(element.localName);
     if (!definition) return;
+
+    definition = this.ensureDefinitionGenerated(definition);
 
     definition.constructionStack.push(element);
 
