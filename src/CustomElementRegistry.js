@@ -66,6 +66,11 @@ export default class CustomElementRegistry {
     this._documentConstructionObserver = new DocumentConstructionObserver(internals, document);
   }
 
+  /**
+   * @param {string} localName
+   * @param {!Function} constructor
+   * @param {boolean} isClassGenerator
+   */
   _define(localName, constructor, isClassGenerator) {
     if (!(constructor instanceof Function)) {
       throw new TypeError('Custom element constructors must be functions.');
@@ -94,6 +99,11 @@ export default class CustomElementRegistry {
     const definition = isClassGenerator ? constructor :
       this._internals.createDefinition(localName, constructor);
     this._elementDefinitionIsRunning = false;
+
+    // no definition or error when creating it.
+    if (!definition) {
+      return;
+    }
 
     this._internals.setDefinition(localName, definition);
     this._pendingDefinitions.push(definition);
@@ -201,9 +211,9 @@ export default class CustomElementRegistry {
    * @return {Function|undefined}
    */
   get(localName) {
-    const definition = this._internals.localNameToDefinition(localName);
+    let definition = this._internals.localNameToDefinition(localName);
     if (definition) {
-      this._internals.ensureDefinitionGenerated(definition);
+      definition = this._internals.ensureDefinitionGenerated(definition);
       return definition.constructorFunction;
     }
 
@@ -248,6 +258,7 @@ export default class CustomElementRegistry {
 // Closure compiler exports.
 window['CustomElementRegistry'] = CustomElementRegistry;
 CustomElementRegistry.prototype['define'] = CustomElementRegistry.prototype.define;
+CustomElementRegistry.prototype['lazyDefine'] = CustomElementRegistry.prototype.lazyDefine;
 CustomElementRegistry.prototype['upgrade'] = CustomElementRegistry.prototype.upgrade;
 CustomElementRegistry.prototype['get'] = CustomElementRegistry.prototype.get;
 CustomElementRegistry.prototype['whenDefined'] = CustomElementRegistry.prototype.whenDefined;
