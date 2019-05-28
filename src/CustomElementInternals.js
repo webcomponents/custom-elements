@@ -12,7 +12,7 @@ import * as Utilities from './Utilities.js';
 import CEState from './CustomElementState.js';
 
 export default class CustomElementInternals {
-  constructor() {
+  constructor(preferPerformance) {
     /** @type {!Map<string, !CustomElementDefinition>} */
     this._localNameToDefinition = new Map();
 
@@ -27,6 +27,12 @@ export default class CustomElementInternals {
 
     /** @type {boolean} */
     this._hasPatches = false;
+
+    /** @type {boolean} */
+    this._elementDefinitionIsRunning = false;
+
+    /** @type {boolean} */
+    this.preferPerformance = preferPerformance || false;
   }
 
   /**
@@ -39,8 +45,8 @@ export default class CustomElementInternals {
   }
 
   /**
-   *
-   * @param {function} constructor
+   * @param {string} localName
+   * @param {!Function} constructor
    */
   createDefinition(localName, constructor) {
     let connectedCallback;
@@ -115,6 +121,31 @@ export default class CustomElementInternals {
   }
 
   /**
+   * @param {!Node} node
+   * @param {!function(!Element)} callback
+   * @param {!Set<!Node>=} visitedImports
+   */
+  onElements(node, callback, visitedImports) {
+    if (!this.preferPerformance) {
+      Utilities.walkDeepDescendantElements(node, callback, visitedImports);
+    } else {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = /** @type {!Element} */(node);
+        callback(element);
+      }
+      // most easily gets to document, element, documentFragment
+      if (node.querySelectorAll) {
+        const sd = window['ShadyDOM'];
+        const elements = (!sd || !sd['inUse']) ? node.querySelectorAll('*') :
+          sd['nativeMethods'].querySelectorAll.call(node, '*');
+        for (let i = 0; i < elements.length; i++) {
+          callback(elements[i]);
+        }
+      }
+    }
+  }
+
+  /**
    * @param {!function(!Node)} patch
    */
   addNodePatch(patch) {
@@ -136,7 +167,7 @@ export default class CustomElementInternals {
   patchTree(node) {
     if (!this._hasPatches) return;
 
-    Utilities.walkDeepDescendantElements(node, element => this.patchElement(element));
+    this.onElements(node, element => this.patchElement(element));
   }
 
   /**
@@ -177,7 +208,11 @@ export default class CustomElementInternals {
   connectTree(root) {
     const elements = [];
 
-    Utilities.walkDeepDescendantElements(root, element => elements.push(element));
+    this.onElements(root, element => {
+      if (this.localNameToDefinition(element.localName)) {
+        elements.push(element);
+      }
+    });
 
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -195,7 +230,11 @@ export default class CustomElementInternals {
   disconnectTree(root) {
     const elements = [];
 
-    Utilities.walkDeepDescendantElements(root, element => elements.push(element));
+    this.onElements(root, element => {
+      if (this.localNameToDefinition(element.localName)) {
+        elements.push(element);
+      }
+    });
 
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
@@ -278,7 +317,8 @@ export default class CustomElementInternals {
     const elements = [];
 
     const gatherElements = element => {
-      if (element.localName === 'link' && element.getAttribute('rel') === 'import') {
+      if (!this.preferPerformance && element.localName === 'link' &&
+          element.getAttribute('rel') === 'import') {
         // The HTML Imports polyfill sets a descendant element of the link to
         // the `import` property, specifically this is *not* a Document.
         const importNode = /** @type {?Node} */ (element.import);
@@ -312,19 +352,18 @@ export default class CustomElementInternals {
           });
         }
       } else {
-        elements.push(element);
+        if (this._hasPatches) {
+          this.patchElement(element);
+        }
+        if (this.localNameToDefinition(element.localName)) {
+          elements.push(element);
+        }
       }
     };
 
-    // `walkDeepDescendantElements` populates (and internally checks against)
+    // `onElements` populates (and internally checks against)
     // `visitedImports` when traversing a loaded import.
-    Utilities.walkDeepDescendantElements(root, gatherElements, visitedImports);
-
-    if (this._hasPatches) {
-      for (let i = 0; i < elements.length; i++) {
-        this.patchElement(elements[i]);
-      }
-    }
+    this.onElements(root, gatherElements, visitedImports);
 
     for (let i = 0; i < elements.length; i++) {
       upgrade(elements[i]);

@@ -12,6 +12,9 @@
 /** @type {boolean|undefined} */
 CustomElementRegistry.prototype.forcePolyfill;
 
+/** @type {boolean|undefined} */
+CustomElementRegistry.prototype.preferPerformance;
+
 /** @type {function(string, !Function)|undefined} */
 CustomElementRegistry.prototype.lazyDefine;
 
