@@ -15,6 +15,9 @@ CustomElementRegistry.prototype.forcePolyfill;
 /** @type {boolean|undefined} */
 CustomElementRegistry.prototype.preferPerformance;
 
+/** @type {function(string, !Function)|undefined} */
+CustomElementRegistry.prototype.polyfillDefineLazy;
+
 class AlreadyConstructedMarkerType {}
 
 /**
@@ -30,6 +33,14 @@ class AlreadyConstructedMarkerType {}
  * }}
  */
 let CustomElementDefinition;
+
+/**
+ * @typedef {{
+ *  localName: string,
+ *  constructorGetter: !Function
+ * }}
+ */
+let CustomElementLazyDefinition;
 
 
 // These properties are defined in the closure externs so that they will not be
