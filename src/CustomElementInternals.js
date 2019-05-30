@@ -9,12 +9,41 @@
  */
 
 import * as Utilities from './Utilities.js';
+import Deferred from './Deferred.js';
 import CEState from './CustomElementState.js';
+
+const PENDING_LAZY_DEFINITION = {};
 
 export default class CustomElementInternals {
   constructor(preferPerformance) {
+    /**
+     * @private
+     * @type {!Map<string, !Deferred<undefined>>}
+     */
+    this._whenDefinedDeferred = new Map();
+
+    /**
+     * The default flush callback triggers the document walk synchronously.
+     * @type {!Function}
+     */
+    this.flushCallback = fn => fn();
+
+    /**
+     * @private
+     * @type {boolean}
+     */
+    this._flushPending = false;
+
+    /**
+     * @private
+     * @type {!Array<!CustomElementDefinition|CustomElementLazyDefinition>}
+     */
+    this._pendingDefinitions = [];
+
     /** @type {!Map<string, !CustomElementDefinition>} */
     this._localNameToDefinition = new Map();
+
+    this._localNameToLazyDefinition = new Map();
 
     /** @type {!Map<!Function, !CustomElementDefinition>} */
     this._constructorToDefinition = new Map();
@@ -29,7 +58,7 @@ export default class CustomElementInternals {
     this._hasPatches = false;
 
     /** @type {boolean} */
-    this._elementDefinitionIsRunning = false;
+    this.elementDefinitionIsRunning = false;
 
     /** @type {boolean} */
     this.preferPerformance = preferPerformance || false;
@@ -37,23 +66,16 @@ export default class CustomElementInternals {
 
   /**
    * @param {string} localName
-   * @param {!CustomElementDefinition} definition
-   */
-  setDefinition(localName, definition) {
-    this._localNameToDefinition.set(localName, definition);
-    this._constructorToDefinition.set(definition.constructorFunction, definition);
-  }
-
-  /**
-   * @param {string} localName
    * @param {!Function} constructor
    */
-  createDefinition(localName, constructor) {
+  setupDefinition(localName, constructor) {
+    this.elementDefinitionIsRunning = true;
     let connectedCallback;
     let disconnectedCallback;
     let adoptedCallback;
     let attributeChangedCallback;
     let observedAttributes;
+    let errorGettingCallbacks = false;
     try {
       /** @type {!Object} */
       const prototype = constructor.prototype;
@@ -75,10 +97,14 @@ export default class CustomElementInternals {
       attributeChangedCallback = getCallback('attributeChangedCallback');
       observedAttributes = constructor['observedAttributes'] || [];
     } catch (e) {
+      errorGettingCallbacks = true;
+    }
+    this.elementDefinitionIsRunning = false;
+    if (errorGettingCallbacks) {
       return;
     }
 
-    return {
+    const definition = {
       localName,
       constructorFunction: constructor,
       connectedCallback,
@@ -86,22 +112,165 @@ export default class CustomElementInternals {
       adoptedCallback,
       attributeChangedCallback,
       observedAttributes,
-      constructionStack: [],
-      isClassGenerator: false
+      constructionStack: []
     };
+
+    this.setDefinition(localName, definition);
+
+    return definition;
   }
 
-  ensureDefinitionGenerated(definition) {
-    // Reify definition if it is a class generator.
-    if (definition.isClassGenerator) {
-      this._elementDefinitionIsRunning = true;
-      const localName = definition.localName;
-      const constructor = definition();
-      definition = this.createDefinition(localName, constructor);
-      this._elementDefinitionIsRunning = false;
-      this.setDefinition(localName, definition);
-    }
+  /**
+   * @param {string} localName
+   * @param {!CustomElementDefinition} definition
+   */
+  setDefinition(localName, definition) {
+    this._localNameToDefinition.set(localName, definition);
+    this._constructorToDefinition.set(definition.constructorFunction, definition);
+  }
+
+  /**
+   * @param {string} localName
+   * @param {!Function} constructorGenerator
+   */
+  setupLazyDefinition(localName, constructorGenerator) {
+    const definition = {
+      localName,
+      constructorGenerator
+    };
+    this.setLazyDefinition(localName, definition);
     return definition;
+  }
+
+  /**
+   * @param {string} localName
+   * @param {!Function|undefined|Object} lazyDefinition
+   */
+  setLazyDefinition(localName, lazyDefinition) {
+    this._localNameToLazyDefinition.set(localName, lazyDefinition);
+  }
+
+  processDefinition(definition) {
+    this._pendingDefinitions.push(definition);
+
+    // If we've already called the flush callback and it hasn't called back yet,
+    // don't call it again.
+    if (!this._flushPending) {
+      this._flushPending = true;
+      this.flushCallback(() => this._flush());
+    }
+  }
+
+  _flush() {
+    // If no new definitions were defined, don't attempt to flush. This could
+    // happen if a flush callback keeps the function it is given and calls it
+    // multiple times.
+    if (this._flushPending === false) return;
+    this._flushPending = false;
+
+    const pendingDefinitions = this._pendingDefinitions;
+
+    /**
+     * Unupgraded elements with definitions that were defined *before* the last
+     * flush, in document order.
+     * @type {!Array<!HTMLElement>}
+     */
+    const elementsWithStableDefinitions = [];
+
+    /**
+     * A map from `localName`s of definitions that were defined *after* the last
+     * flush to unupgraded elements matching that definition, in document order.
+     * @type {!Map<string, !Array<!HTMLElement>>}
+     */
+    const elementsWithPendingDefinitions = new Map();
+    for (let i = 0; i < pendingDefinitions.length; i++) {
+      elementsWithPendingDefinitions.set(pendingDefinitions[i].localName, []);
+    }
+
+    this.patchAndUpgradeTree(document, {
+      upgrade: element => {
+        // Ignore the element if it has already upgraded or failed to upgrade.
+        if (element.__CE_state !== undefined) return;
+
+        const localName = element.localName;
+
+        // If there is an applicable pending definition for the element, add the
+        // element to the list of elements to be upgraded with that definition.
+        const pendingElements = elementsWithPendingDefinitions.get(localName);
+        if (pendingElements) {
+          pendingElements.push(element);
+        // If there is *any other* applicable definition for the element, add it
+        // to the list of elements with stable definitions that need to be upgraded.
+        } else if (this.localNameToDefinition(localName) ||
+            this.localNameToLazyDefinition(localName)) {
+          elementsWithStableDefinitions.push(element);
+        }
+      },
+    });
+
+    // Upgrade elements with 'stable' definitions first.
+    for (let i = 0; i < elementsWithStableDefinitions.length; i++) {
+      this.upgradeElement(elementsWithStableDefinitions[i]);
+    }
+
+    // Upgrade elements with 'pending' definitions in the order they were defined.
+    while (pendingDefinitions.length > 0) {
+      const definition = pendingDefinitions.shift();
+      const localName = definition.localName;
+
+      // Attempt to upgrade all applicable elements.
+      const pendingUpgradableElements = elementsWithPendingDefinitions.get(definition.localName);
+      for (let i = 0; i < pendingUpgradableElements.length; i++) {
+        this.upgradeElement(pendingUpgradableElements[i]);
+      }
+
+      // Resolve any promises created by `whenDefined` for the definition.
+      const deferred = this._whenDefinedDeferred.get(localName);
+      if (deferred) {
+        deferred.resolve(undefined);
+      }
+    }
+  }
+
+  /**
+   *
+   * @param {string} localName
+   */
+  flushLazyDefinition(localName) {
+    const pendingLazyDefinition = this.localNameToLazyDefinition(localName);
+
+    // only process this pending definition the first time and not while it's pending.
+    if (!pendingLazyDefinition && pendingLazyDefinition !== PENDING_LAZY_DEFINITION) {
+      return;
+    }
+
+    // mark this definition in a pending state.
+    this.setLazyDefinition(localName, PENDING_LAZY_DEFINITION);
+
+    let constructorOrPromise;
+    try {
+      constructorOrPromise = pendingLazyDefinition.constructorGenerator();
+    } catch (e) {}
+    if (!constructorOrPromise) {
+      return;
+    }
+
+    // if it's a promise, defer processing.
+    if (typeof constructorOrPromise.then === 'function') {
+      constructorOrPromise.then((constructor) => {
+        const definition = this.setupDefinition(localName, constructor);
+        if (definition) {
+          this.setLazyDefinition(localName, undefined);
+          this.processDefinition(definition);
+        }
+      });
+    } else {
+      const definition = this.setupDefinition(localName, constructorOrPromise);
+      if (definition) {
+        this.setLazyDefinition(localName, undefined);
+        return definition;
+      }
+    }
   }
 
   /**
@@ -113,11 +282,39 @@ export default class CustomElementInternals {
   }
 
   /**
+   * @param {string} localName
+   * @return {!CustomElementLazyDefinition|undefined}
+   */
+  localNameToLazyDefinition(localName) {
+    return this._localNameToLazyDefinition.get(localName);
+  }
+
+  /**
    * @param {!Function} constructor
    * @return {!CustomElementDefinition|undefined}
    */
   constructorToDefinition(constructor) {
     return this._constructorToDefinition.get(constructor);
+  }
+
+  whenDefined(localName) {
+    const prior = this._whenDefinedDeferred.get(localName);
+    if (prior) {
+      return prior.toPromise();
+    }
+
+    const deferred = new Deferred();
+    this._whenDefinedDeferred.set(localName, deferred);
+
+    const definition = this.localNameToDefinition(localName);
+    // Resolve immediately only if the given local name has a definition *and*
+    // the full document walk to upgrade elements with that local name has
+    // already happened.
+    if (definition && !this._pendingDefinitions.some(d => d.localName === localName)) {
+      deferred.resolve(undefined);
+    }
+
+    return deferred.toPromise();
   }
 
   /**
@@ -355,7 +552,8 @@ export default class CustomElementInternals {
         if (this._hasPatches) {
           this.patchElement(element);
         }
-        if (this.localNameToDefinition(element.localName)) {
+        if (this.localNameToDefinition(element.localName) ||
+            this.localNameToLazyDefinition(element.localName)) {
           elements.push(element);
         }
       }
@@ -393,10 +591,9 @@ export default class CustomElementInternals {
       !(ownerDocument.__CE_isImportDocument && ownerDocument.__CE_hasRegistry)
     ) return;
 
-    let definition = this.localNameToDefinition(element.localName);
+    const definition = this.localNameToDefinition(element.localName) ||
+      this.flushLazyDefinition(element.localName);
     if (!definition) return;
-
-    definition = this.ensureDefinitionGenerated(definition);
 
     definition.constructionStack.push(element);
 
