@@ -57,7 +57,7 @@ export function isConnected(node) {
 }
 
 /**
- * @param {!DocumentFragment} fragment
+ * @param {!ParentNode} fragment
  * @return {!Array<!Element>}
  */
 export function childrenFromFragment(fragment) {
