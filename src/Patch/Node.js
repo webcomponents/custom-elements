@@ -28,7 +28,7 @@ export default function(internals) {
      */
     function(node, refNode) {
       if (node instanceof DocumentFragment) {
-        const insertedNodes = Utilities.childrenFromFragment(node);
+        const insertedNodes = Utilities.childrenFromParentNode(node);
         const nativeResult = Native.Node_insertBefore.call(this, node, refNode);
 
         // DocumentFragments can't be connected, so `disconnectTree` will never
@@ -65,7 +65,7 @@ export default function(internals) {
      */
     function(node) {
       if (node instanceof DocumentFragment) {
-        const insertedNodes = Utilities.childrenFromFragment(node);
+        const insertedNodes = Utilities.childrenFromParentNode(node);
         const nativeResult = Native.Node_appendChild.call(this, node);
 
         // DocumentFragments can't be connected, so `disconnectTree` will never
@@ -138,7 +138,7 @@ export default function(internals) {
      */
     function(nodeToInsert, nodeToRemove) {
       if (nodeToInsert instanceof DocumentFragment) {
-        const insertedNodes = Utilities.childrenFromFragment(nodeToInsert);
+        const insertedNodes = Utilities.childrenFromParentNode(nodeToInsert);
         const nativeResult = Native.Node_replaceChild.call(this, nodeToInsert, nodeToRemove);
 
         // DocumentFragments can't be connected, so `disconnectTree` will never
